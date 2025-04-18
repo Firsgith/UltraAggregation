@@ -39,6 +39,7 @@
 # 例如：
 #    # https://github.com/user/repo.git,path=custom_path;
 #    上述规则被注释后，主仓库中的 ./custom_path/repo 目录将会被移除。
+https://github.com/chenmozhijin/turboacc.git;
 https://github.com/sirpdboy/luci-app-ddns-go.git;
 https://github.com/Firsgith/luci-app-zerotierV2.git;
 https://github.com/immortalwrt/luci.git,themes/luci-theme-bootstrap,path=themes,depth=1;
