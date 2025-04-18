@@ -31,7 +31,7 @@ def get_latest_commit_hash(repo_url):
     """
     获取远程仓库的最新提交哈希值。
     :param repo_url: 仓库地址
-    :return: 最新提交哈希值
+    :return: 最新提交哈希值（如果失败则返回 None）
     """
     print(f"Fetching latest commit hash for {repo_url}...")
     try:
@@ -53,12 +53,11 @@ def parse_line(line):
     """
     解析一行输入，提取仓库地址、子目录路径、目标路径、克隆深度和当前哈希值。
     :param line: 输入行
-    :return: (repo_url, sub_dir, target_path, depth, current_hash, raw_line)
+    :return: (repo_url, sub_dir, target_path, depth, current_hash)
     """
-    raw_line = line.strip()
     line = line.strip().rstrip(";")  # 去掉末尾的分号
     if not line or line.startswith("#"):
-        return None, None, None, None, None, raw_line
+        return None, None, None, None, None
 
     parts = line.split(",")
     repo_url = parts[0].strip()  # 第一部分：仓库地址
@@ -86,43 +85,32 @@ def parse_line(line):
             # 如果没有 path= 或 depth=，则认为这是子目录路径
             sub_dir = part
 
-    # 确保目标路径不会重复拼接
-    if target_path and sub_dir:
-        # 如果目标路径已经包含子目录的最后一部分，则不再追加
-        if not target_path.endswith(os.path.basename(sub_dir)):
-            target_path = os.path.join(target_path, os.path.basename(sub_dir))
+    # 目标路径的生成逻辑
+    if target_path:
+        if sub_dir:
+            # 只追加一次子目录路径
+            target_path = os.path.normpath(os.path.join(target_path, os.path.basename(sub_dir)))
+        else:
+            # 如果没有子目录路径，则使用仓库名称作为默认路径
+            target_path = os.path.normpath(os.path.join(target_path, os.path.basename(repo_url).replace(".git", "")))
     elif sub_dir:
-        # 如果没有指定目标路径，则默认为目标路径为子目录的最后一部分
         target_path = os.path.basename(sub_dir)
-    elif not target_path:
-        # 如果没有指定目标路径和子目录路径，默认为目标路径为仓库名
+    else:
         target_path = os.path.basename(repo_url).replace(".git", "")
 
-    return repo_url, sub_dir, target_path, depth, current_hash, raw_line
+    return repo_url, sub_dir, target_path, depth, current_hash
 
-def update_packages_file(packages_lines, updated_entries):
+def update_packages_file(packages_entries):
     """
-    更新 packages 文件，保存最新的哈希值，同时保留注释和空行。
-    :param packages_lines: 原始的 packages 文件内容（列表形式）
-    :param updated_entries: 更新后的条目字典
+    更新 packages 文件，保存最新的哈希值。
+    :param packages_entries: 包含所有条目的列表，每个条目是一个字典。
     """
     with open(PACKAGES_FILE, "w") as file:
-        for line in packages_lines:
-            stripped_line = line.strip()
-            if not stripped_line or stripped_line.startswith("#"):
-                # 保留注释和空行
-                file.write(line)
-                continue
-
-            # 解析当前行
-            repo_url, _, _, _, _, _ = parse_line(line)
-            if repo_url and repo_url in updated_entries:
-                # 如果是需要更新的条目，写入新的内容
-                new_entry = updated_entries[repo_url]
-                file.write(f"{new_entry['repo_url']},path={new_entry['target_path']},hash={new_entry['latest_hash']}\n")
-            else:
-                # 否则保留原始内容
-                file.write(line)
+        for entry in packages_entries:
+            # 确保路径是规范化的
+            target_path = os.path.normpath(entry["target_path"])
+            line = f"{entry['repo_url']},path={target_path},hash={entry['latest_hash']}"
+            file.write(f"{line}\n")
 
 def sync_repositories():
     """
@@ -137,13 +125,10 @@ def sync_repositories():
     synced_paths = []
 
     # 读取 packages 文件内容
-    packages_lines = []
     packages_entries = []
-    updated_entries = {}
     with open(PACKAGES_FILE, "r") as file:
         for line in file:
-            packages_lines.append(line)  # 保留原始内容
-            repo_url, sub_dir, target_path, depth, current_hash, raw_line = parse_line(line)
+            repo_url, sub_dir, target_path, depth, current_hash = parse_line(line)
             if not repo_url:
                 continue
 
@@ -169,17 +154,8 @@ def sync_repositories():
                 "depth": depth,
                 "current_hash": current_hash,
                 "latest_hash": latest_hash,
-                "needs_sync": needs_sync,
-                "raw_line": raw_line
+                "needs_sync": needs_sync
             })
-
-            # 如果需要更新，记录到更新字典中
-            if needs_sync:
-                updated_entries[repo_url] = {
-                    "repo_url": repo_url,
-                    "target_path": target_path,
-                    "latest_hash": latest_hash
-                }
 
     # 执行同步操作
     for entry in packages_entries:
@@ -239,7 +215,7 @@ def sync_repositories():
             file.write(f"{path}\n")
 
     # 更新 packages 文件
-    update_packages_file(packages_lines, updated_entries)
+    update_packages_file(packages_entries)
 
 if __name__ == "__main__":
     sync_repositories()
