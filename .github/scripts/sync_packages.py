@@ -86,6 +86,18 @@ def parse_line(line):
             # 如果没有 path= 或 depth=，则认为这是子目录路径
             sub_dir = part
 
+    # 确保目标路径不会重复拼接
+    if target_path and sub_dir:
+        # 如果目标路径已经包含子目录的最后一部分，则不再追加
+        if not target_path.endswith(os.path.basename(sub_dir)):
+            target_path = os.path.join(target_path, os.path.basename(sub_dir))
+    elif sub_dir:
+        # 如果没有指定目标路径，则默认为目标路径为子目录的最后一部分
+        target_path = os.path.basename(sub_dir)
+    elif not target_path:
+        # 如果没有指定目标路径和子目录路径，默认为目标路径为仓库名
+        target_path = os.path.basename(repo_url).replace(".git", "")
+
     return repo_url, sub_dir, target_path, depth, current_hash, raw_line
 
 def update_packages_file(packages_lines, updated_entries):
