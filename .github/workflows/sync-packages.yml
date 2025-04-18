@@ -1,0 +1,125 @@
+name: Sync packages from repositories
+
+on:
+  workflow_dispatch: # 手动触发
+  push: # 或者在特定分支推送时触发
+    branches:
+      - main
+
+jobs:
+  sync-packages:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 检出主仓库
+      - name: Checkout main repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+
+      # 安装 Python 和依赖
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      # 运行 Python 脚本同步仓库
+      - name: Run Python script to sync repositories
+        run: |
+          python .github/scripts/sync_packages.py
+
+      # 配置 Git 凭据并提交更改
+      - name: Configure Git and commit changes
+        run: |
+          # 配置 Git 用户信息
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # 使用 SYNC_TOKEN 配置身份验证
+          git remote set-url origin https://${{ github.actor }}:${{ secrets.SYNC_TOKEN }}@github.com/${{ github.repository }}.git
+
+          # 检查是否有更改
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          # 动态生成提交消息
+          ADDED_FILES=$(git diff --name-only --diff-filter=A)
+          DELETED_FILES=$(git diff --name-only --diff-filter=D)
+          MODIFIED_FILES=$(git diff --name-only --diff-filter=M)
+
+          COMMIT_MESSAGE="Sync packages from repositories"
+
+          # 检查是否有新增、删除或修改的文件
+          if [ -n "$ADDED_FILES" ]; then
+            COMMIT_MESSAGE="$COMMIT_MESSAGE\nAdded:\n$ADDED_FILES"
+          fi
+          if [ -n "$DELETED_FILES" ]; then
+            COMMIT_MESSAGE="$COMMIT_MESSAGE\nRemoved:\n$DELETED_FILES"
+          fi
+          if [ -n "$MODIFIED_FILES" ]; then
+            COMMIT_MESSAGE="$COMMIT_MESSAGE\nModified:\n$MODIFIED_FILES"
+          fi
+
+          # 提交更改
+          git add .
+          git commit -m "$COMMIT_MESSAGE" || echo "No changes to commit"
+          git push
+
+      # 清理旧的 Workflow Runs，仅保留最近的 3 条
+      - name: Clean up old workflow runs
+        env:
+          GITHUB_TOKEN: ${{ secrets.SYNC_TOKEN }} # 使用具有更高权限的 PAT
+        run: |
+          # 获取当前仓库的所有 Workflow Runs（处理分页）
+          PAGE=1
+          ALL_RUNS=()
+          while true; do
+            RESPONSE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs?page=$PAGE&per_page=100")
+            
+            RUNS_COUNT=$(echo "$RESPONSE" | jq '.workflow_runs | length')
+            if [ "$RUNS_COUNT" -eq 0 ]; then
+              break
+            fi
+
+            # 将当前页的 Runs 添加到数组中
+            CURRENT_PAGE_RUNS=$(echo "$RESPONSE" | jq -r '.workflow_runs[] | select(.head_branch == "main") | "\(.id)"')
+            ALL_RUNS+=($CURRENT_PAGE_RUNS)
+
+            echo "Page $PAGE: Found $RUNS_COUNT runs"
+            PAGE=$((PAGE + 1))
+          done
+
+          # 按创建时间排序（从新到旧）
+          SORTED_RUNS=$(printf "%s\n" "${ALL_RUNS[@]}" | sort -nr)
+
+          # 仅保留最近的 3 条，删除其余的
+          RUN_COUNT=0
+          for RUN_ID in $SORTED_RUNS; do
+            # 验证 Run ID 是否有效
+            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID")
+            if [ "$STATUS_CODE" -ne 200 ]; then
+              echo "Run ID $RUN_ID is invalid, skipping..."
+              continue
+            fi
+
+            if [ $RUN_COUNT -ge 3 ]; then
+              echo "Deleting Workflow Run ID: $RUN_ID"
+              DELETE_RESPONSE=$(curl -X DELETE -s -o /dev/null -w "%{http_code}" \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                "https://api.github.com/repos/${{ github.repository }}/actions/runs/$RUN_ID")
+              if [ "$DELETE_RESPONSE" -eq 204 ]; then
+                echo "Successfully deleted Run ID $RUN_ID"
+              else
+                echo "Failed to delete Run ID $RUN_ID (HTTP $DELETE_RESPONSE)"
+              fi
+            else
+              echo "Keeping Workflow Run ID: $RUN_ID"
+            fi
+            RUN_COUNT=$((RUN_COUNT + 1))
+          done

@@ -1,0 +1,56 @@
+# packages 文件用于定义需要同步到主仓库的第三方仓库。
+# 每行定义一个仓库同步规则，以英文分号 ";" 结尾。
+#
+# 支持以下格式：
+#
+# 1.  仓库地址;
+#     - 同步整个仓库到主仓库根目录，目录名默认为仓库名（去除 .git 后缀）。
+#     - 例如: https://github.com/user/repo.git; 
+#             将会同步到主仓库的 ./repo/ 目录。
+#
+# 2.  仓库地址,子目录路径;
+#     - 同步仓库的指定子目录到主仓库根目录，目录名默认为子目录路径的最后一部分。
+#     - 例如: https://github.com/user/repo.git,src/folder; 
+#             将会同步到主仓库的 ./folder/ 目录。
+#
+# 3.  仓库地址,path=目标路径;
+#     - 同步整个仓库到主仓库的指定目标路径。
+#     - 例如: https://github.com/user/repo.git,path=custom_path; 
+#             将会同步到主仓库的 ./custom_path/repo 目录。
+#
+# 4.  仓库地址,子目录路径,path=目标路径;
+#     - 同步仓库的指定子目录到主仓库的指定目标路径。
+#     - 例如: https://github.com/user/repo.git,themes/theme1,path=my_themes; 
+#             将会同步到主仓库的 ./my_themes/theme1 目录。
+#     - 注意：path= 可以出现在中间或后面，不影响解析结果。
+#
+# 5.  仓库地址,depth=克隆深度;
+#     - 支持浅克隆（shallow clone），通过 depth 参数指定克隆深度。
+#     - 例如: https://github.com/user/repo.git,depth=1; 
+#             将会进行浅克隆（仅克隆最近的一次提交）。
+#     - 浅克隆可以与其他参数组合使用，例如：
+#       https://github.com/user/repo.git,src/folder,path=custom_path,depth=5;
+#       将会同步仓库的 src/folder 子目录到 ./custom_path/folder，并限制克隆深度为 5。
+#
+# 注释行以 '#' 开头，空行会被忽略。
+# 请确保路径分隔符在不同操作系统下的兼容性 (建议使用 Unix 风格的路径)。
+#
+# 删除或注释掉某条规则后，脚本将会从主仓库中删除对应的同步内容。
+# 例如：
+#    # https://github.com/user/repo.git,path=custom_path;
+#    上述规则被注释后，主仓库中的 ./custom_path/repo 目录将会被移除。
+https://github.com/sirpdboy/luci-app-ddns-go.git;
+https://github.com/Firsgith/luci-app-zerotierV2.git;
+https://github.com/immortalwrt/luci.git,themes/luci-theme-bootstrap,path=themes,depth=1;
+https://github.com/Firsgith/luci-app-cifs-mount.git;
+https://github.com/Firsgith/luci-app-tailscale.git;
+https://github.com/Firsgith/luci-app-wolplus.git;
+https://github.com/jerrykuku/luci-theme-argon.git,path=themes;
+https://github.com/linkease/nas-packages.git,path=linkease;
+https://github.com/linkease/nas-packages-luci.git,path=linkease;
+https://github.com/linkease/istore.git,path=linkease;
+https://github.com/sirpdboy/luci-app-poweroffdevice.git;
+https://github.com/EasyTier/luci-app-easytier.git;
+#https://github.com/openwrt/luci.git,applications/luci-app-strongswan-swanctl,depth=1;
+https://github.com/vernesong/OpenClash.git,depth=1;
+https://github.com/Firsgith/luci-app-zerotier.git;
